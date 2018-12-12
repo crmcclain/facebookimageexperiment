@@ -1,0 +1,675 @@
+---
+title: "Facebook Photo Analysis"
+author: "Craig R. McClain"
+date: "11/18/2018"
+output:
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages Needed
+
+```{r, warning=FALSE, message=FALSE}
+require(ggplot2)
+require(dplyr)
+library(chron)
+library(gridExtra)
+require(DescTools)
+library(car)
+library(scales)
+require(corrplot)
+library(Hmisc)
+library(plyr)
+library(AER)
+library(MASS)
+library(rcompanion)
+library(multcompView)
+library(emmeans)
+library(pscl)
+library(knitr)
+library(kableExtra)
+```
+
+##Load and Process Data
+```{r}
+setwd("~/Desktop/Facebook Paper/Facebook Experiment")
+fb_photo<-read.csv("taxa_experiment.csv", header=TRUE)
+glimpse(fb_photo)
+```
+```{r}
+fb_data <- fb_photo %>%
+  mutate(Date = as.Date(Date , "%m/%d/%y"),
+         Time = chron(times = Time),
+         Days = as.numeric(Date-min(Date)),
+         LogLikes = log10(Like.24),
+         LogShares = log10(Share.24),
+         LogComments = log10(Comment.24),
+         LogCapCount = log10(Word.Count),
+         Percent.Likes = Like.24/Like.Current,
+         Percent.Comment = Comment.24/Comment.Current,
+         Percent.Share = Share.24/Share.Current
+  )
+
+fb_data$Taxa <- revalue(fb_data$Taxa, c("Jellyfish"="Medusozoa", "Coral" = "Anthozoa","Gastropod  Non nudibranch  & Bivalve"="GastropodBivalve"))
+
+glimpse(fb_data)
+   
+```
+
+## Color Pallettes
+
+Likes #3b5998 
+Shares #5B9A9B
+Comments #BDBC89
+
+## Correlations Between Old and New Data
+
+
+```{r, warning=FALSE, message=FALSE}
+l1<- ggplot(fb_data, aes(x=log10(Like.24), y=log10(Like.Current)))+
+  geom_point(pch=21, size=3, fill="#3b5998", color="black", alpha=.8)+
+  geom_abline(intercept=0, slope=1)+
+  geom_abline(intercept=.1, slope=1, linetype=2)+
+  xlab("Log10 Likes at 24 hrs")+
+  ylab("Log10 Likes Current")+
+  ggtitle("A")+
+  theme_bw(base_size=10)+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+
+
+c1 <- ggplot(fb_data, aes(x=log10(Comment.24), y=log10(Comment.Current)))+
+  geom_jitter(pch=21, size=3, fill="#BDBC89", color="black", 
+              alpha=.8, width = 0.02)+
+  geom_abline(intercept=0, slope=1)+
+  geom_abline(intercept=.1, slope=1, linetype=2)+
+  xlab("Log10 Comments at 24 hrs")+
+  ylab("Log10 Comments Current")+
+  ggtitle("B")+
+  theme_bw(base_size=10)+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+s1 <- ggplot(fb_data, aes(x=log10(Share.24), y=log10(Share.Current)))+
+  geom_jitter(pch=21, size=3, fill="#5B9A9B", color="black", 
+              alpha=.8, width = 0.02)+
+  geom_abline(intercept=0, slope=1)+
+  geom_abline(intercept=.1, slope=1, linetype=2)+
+  xlab("Log10 Shares at 24 hrs")+
+  ylab("Log10 Shares Current")+
+  ggtitle("C")+
+  theme_bw(base_size=10)+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+grid.arrange(l1,c1,s1, ncol=1)
+```
+
+## Correlation Analyses
+
+```{r}
+fb_corr <- fb_data %>%
+  dplyr::select(Like.24, Share.24, Comment.24, Like.Current, Comment.Current,
+         Share.Current)
+
+M <- cor(fb_corr,use="complete.obs", method="spearman")
+kable(M) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+```{r}
+rcorr(as.matrix(fb_corr), type="spearman") 
+```
+```{r}
+quantile(fb_data$Percent.Likes, na.rm=TRUE)
+quantile(fb_data$Like.24, na.rm=TRUE)
+
+summary(fb_data$Percent.Comment)
+summary(fb_data$Comment.24)
+sum(fb_data$Comment.24 == 0)/76
+sum(fb_data$Percent.Comment== 1, na.rm=TRUE)/(76-21)
+quantile(fb_data$Percent.Comment, na.rm=TRUE)
+
+summary(fb_data$Share.24)
+sum(fb_data$Share.24 == 0)/76
+summary(fb_data$Percent.Share)
+
+```
+
+```{r, warning=FALSE, message=FALSE}
+l2 <- ggplot(fb_data, aes(log10(Like.24)))+
+  geom_histogram(fill="#3b5998", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab(NULL)+
+  xlab("Log10 Like at 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+
+c2 <- ggplot(fb_data, aes(log10(Comment.24)))+
+  geom_histogram(fill="#BDBC89", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab("Number")+
+  xlab("Log10 Comments at 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+s2 <- ggplot(fb_data, aes(log10(Share.24)))+
+  geom_histogram(fill="#5B9A9B", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab(NULL)+
+  xlab("Log10 Shares at 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+l2b <- ggplot(fb_data, aes(x=Percent.Likes))+
+  geom_histogram(fill="#3b5998", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab(NULL)+
+  xlab("Percent of Likes in 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+
+c2b <- ggplot(fb_data, aes(x=Percent.Comment))+
+  geom_histogram(fill="#BDBC89", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab(NULL)+
+  xlab("Percent of Comments in 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+s2b <- ggplot(fb_data, aes(Percent.Share))+
+  geom_histogram(fill="#5B9A9B", color="black", alpha=.8)+
+  theme_bw(base_size=10)+
+  ylab(NULL)+
+  xlab("Percent of Shares in 24 hrs")+
+  theme(axis.line = element_line(colour = "darkgrey"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank(),
+        legend.position="none",
+        plot.title = element_text(lineheight=.8, face="bold", hjust = 0))
+
+grid.arrange(l2, l2b, c2, c2b, s2, s2b, ncol=2)
+
+```
+
+## Predicting Likes Analyses
+
+```{r, warning=FALSE, messages=FALSE}
+p1 <- ggplot(fb_data, aes(Awe.Factor,LogLikes))+
+        geom_boxplot(fill="#3b5998", color="black", alpha=.8, notch=FALSE)+
+        theme_bw(base_size=10)+
+        theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+        xlab("Awe Factor")+
+        ylab("Log10 Facebook Likes")+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p2 <- ggplot(fb_data, aes(Photo.Type, LogLikes))+
+        geom_boxplot(fill="#3b5998", color="black", alpha=.8, notch=FALSE)+
+        theme_bw(base_size=10)+
+        theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+        xlab("Photo Type")+
+        ylab(NULL) +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+p3 <- ggplot(fb_data, aes(Caption.Type, LogLikes))+
+        geom_boxplot(fill="#3b5998", color="black", alpha=.8, notch=FALSE)+
+        theme_bw(base_size=10)+
+        theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+        xlab("Caption Type")+
+        ylab(NULL)+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+p4 <- ggplot(fb_data, aes(Taxa, LogLikes))+
+        geom_boxplot(fill="#3b5998", color="black", alpha=.8, notch=FALSE)+
+        theme_bw(base_size=10)+
+        theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+        xlab("Taxa")+
+        ylab("Log10 Facebook Likes")+
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+        scale_x_discrete(labels = wrap_format(15))
+  
+grid.arrange(p1,p2,p3,p4, layout_matrix = rbind(c(1, 2, 3),
+                                                c(4, 4, 4)))
+```
+
+## Predicting Likes Analyses
+
+```{r, warning=FALSE, messages=FALSE}
+hist(fb_data$Like.24,breaks=50)
+```
+Count data so will need to use Poisson model and test for overdispersion
+```{r}
+like_model_poisson<-glm(data=fb_data, Like.24~
+                     Caption.Type+
+                     Taxa+
+                     Photo.Type+
+                     Awe.Factor+
+                     Days+
+                     Time+
+                     LogCapCount, family=poisson)
+dispersiontest(like_model_poisson,trafo=1)
+```
+Model is over diserpsed with p-value = 3.308e-08.  Proceeding with Negative binomial regression
+```{r}
+like_model_negbin = glm.nb(data=fb_data, Like.24~
+                               Caption.Type+
+                               Taxa+
+                               Photo.Type+
+                               Awe.Factor+
+                               Days+
+                               Time+
+                               LogCapCount,
+                    control = glm.control(maxit=10000))
+  #anova
+  Anova(like_model_negbin, 
+        type="II", 
+        test="LR")
+  #pseudo r squared
+  nagelkerke(like_model_negbin)
+```
+```{r}
+ #comparisons and contrasts
+  marginal_taxa = emmeans(like_model_negbin, ~ Taxa )
+
+  kable(pairs(marginal_taxa, adjust="tukey"))  %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+  kable(cld(marginal_taxa,
+      alpha   = 0.05, 
+      Letters = letters,    ### Use lower-case letters for .group
+      type    = "response", ### Report emmeans in orginal scale
+      adjust =  "tukey"))  %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))    
+  
+  marginal_photo = emmeans(like_model_negbin, ~ Photo.Type )
+  
+  kable(pairs(marginal_photo, adjust="tukey"))  %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+  kable(cld(marginal_photo,
+      alpha   = 0.05, 
+      Letters = letters,    ### Use lower-case letters for .group
+      type    = "response", ### Report emmeans in orginal scale
+      adjust =  "tukey")) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+  marginal_awe = emmeans(like_model_negbin, ~ Awe.Factor )
+  
+  kable(pairs(marginal_awe, adjust="tukey")) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+  kable(cld(marginal_awe,
+      alpha   = 0.05, 
+      Letters = letters,    ### Use lower-case letters for .group
+      type    = "response", ### Report emmeans in orginal scale
+      adjust =  "tukey")) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+  
+```
+
+## Reduced Model
+
+```{r}
+#examine a reduced model
+  drop1(like_model_negbin, test="F")
+  
+  like_model_negbin2 = glm.nb(data=fb_data, Like.24~
+                               Taxa+
+                               Photo.Type+
+                               Awe.Factor,
+                             control = glm.control(maxit=10000))
+  #anova
+  Anova(like_model_negbin2, 
+        type="II", 
+        test="LR")
+  #pseudo r squared
+  nagelkerke(like_model_negbin2)
+  
+  AIC(like_model_negbin, like_model_negbin2)
+```
+
+## Predicting New Data
+
+```{r}
+  newdata1 <- data.frame(Taxa = "Cephalopod", Photo.Type="Color", Awe.Factor="High")
+  temp <- predict(like_model_negbin2, newdata1, type = "response",se.fit = TRUE)
+  newdata1$predicted <- temp$fit
+  newdata1$se <-temp$se.fit
+  newdata1$upr <- with(newdata1, predicted + (2 *se)) 
+  newdata1$lwr <- with(newdata1, predicted - (2 *se)) 
+  newdata1
+```
+
+## Predicting Shares Analyses
+
+```{r, warning=FALSE, message=FALSE}  
+hist(fb_data$Share.24,breaks=50)
+  summary(fb_data$Share.24)
+  sum(fb_data$Share.24 == 0)
+```
+Large number of zeros as well so will need a zero inflation model, Obivously not a Poisson model but will run to show overdispersion
+```{r}
+  share_model_poisson<-glm(data=fb_data, Share.24~
+                            Caption.Type+
+                            Taxa+
+                            Photo.Type+
+                            Awe.Factor+
+                            Days+
+                            Time+
+                            LogCapCount, family=poisson)
+  summary(share_model_poisson)
+  
+  #need to test for overdispersion
+  dispersiontest(share_model_poisson,trafo=1)
+```
+Model is over-dispersed with p-value=0.005757. Proceeding with Negative binomical regerssion
+```{r} 
+        share_model_negbin = glm.nb(data=fb_data, Share.24~
+                                   Caption.Type+
+                                   Taxa+
+                                   Photo.Type+
+                                   Awe.Factor+
+                                   Days+
+                                   Time+
+                                   LogCapCount,
+                                 control = glm.control(maxit=10000))
+          #dispersion test
+          odTest(share_model_negbin) 
+```
+Because Zero-inflation runs two models on zeros and non-zeros particularly sensitive to number of states in independent variables.  Working to reduced taxa down to post hoc groups of social media performance.
+```{r Reduced Taxa Share Anaysis}
+fb_data <- fb_data %>%
+  mutate(Taxa2 = dplyr::recode(Taxa, 
+           Cephalopod = "Charismatic",
+           Osteichthyes = "Charismatic",
+           Medusozoa = "Charismatic",
+           Arthropod = "Average",
+           Anthozoa = "Average",
+           Porifera = "Average",
+           Nudibranch = "Average",
+           Nematoda = "Average",
+           Testudines = "Average",
+           Polychaete = "Average",
+           GastropodBivalve = "Low",
+           Elasmobranch = "Low",
+           Cetacea = "Low",
+           Pinneped = "Low",
+           Echinoderm = "Low"))
+        summary(fb_data$Taxa2)
+
+        share_model_zi3 <- zeroinfl(data=fb_data, Share.24~
+                                       Photo.Type+
+                                       Awe.Factor+
+                                       Taxa2+
+                                      Caption.Type,
+                                     dist = "negbin")
+         
+         summary(share_model_zi3)
+         #anova
+         Anova(share_model_zi3, 
+               type="II", 
+               test="Chisq")
+         
+         #pseudo r squared
+         nagelkerke(share_model_zi3)
+```
+Comparisons
+```{r Share Compariosn with Reduced Taxa}
+         #comparisons
+         marginal_taxa_share = emmeans(share_model_zi3, ~ Taxa2 )
+         
+         kable(pairs(marginal_taxa_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         kable(cld(marginal_taxa_share,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         marginal_caption_share = emmeans(share_model_zi3, ~ Caption.Type )
+         kable(pairs(marginal_caption_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         kable(cld(marginal_caption_share,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         marginal_awe_share = emmeans(share_model_zi3, ~ Awe.Factor )
+         kable(pairs(marginal_awe_share, adjust="tukey"))%>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         kable(cld(marginal_awe_share ,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))    
+         
+         marginal_photo_share = emmeans(share_model_zi3, ~ Photo.Type )
+         
+         kable(pairs(marginal_photo_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         kable(cld(marginal_photo_share ,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey"))%>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## Predicting Shares Plots
+
+```{r, warning=FALSE, message=FALSE}  
+p1s <- ggplot(fb_data, aes(Awe.Factor,LogShares))+
+    geom_boxplot(fill="#5B9A9B", color="black", alpha=.8, notch=FALSE)+
+    theme_bw(base_size=10)+
+    theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+    xlab("Awe Factor")+
+    ylab("Log10 Facebook Shares")+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  p2s <- ggplot(fb_data, aes(Caption.Type, LogShares))+
+    geom_boxplot(fill="#5B9A9B", color="black", alpha=.8, notch=FALSE)+
+    theme_bw(base_size=10)+
+    theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+    xlab("Caption Type")+
+    ylab("Log10 Facebook Shares")+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+  
+  p4s <- ggplot(fb_data, aes(Taxa2, LogLikes))+
+    geom_boxplot(fill="#5B9A9B", color="black", alpha=.8, notch=FALSE)+
+    theme_bw(base_size=10)+
+    theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+    xlab("Taxon Group")+
+    ylab("Log10 Facebook Shares")+
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+    scale_x_discrete(labels = wrap_format(15))
+  
+  grid.arrange(p1s,p2s,p4s, ncol=1)
+  
+  
+  
+```
+
+```{r}
+pdf(file="figure4.pdf",width=8.5, height=11, useDingbats=FALSE)
+par(mar=c(5,3,2,2)+0.1) #removes space from around edges of pdf
+ grid.arrange(p1s,p2s,p4s, ncol=1)
+dev.off()
+```
+
+## Predicting Comments
+
+```{r, warning=FALSE, message=FALSE}  
+hist(fb_data$Comment.24,breaks=50)
+         summary(fb_data$Comment.24)
+         sum(fb_data$Comment.24 == 0)
+```
+Heavily zero inflated so will need a zero infaltion model.  Although obviously inccored, Will run Poisson model to demonstrate overdisperson.
+```{r} 
+  
+         comment_model_poisson<-glm(data=fb_data, Comment.24~
+                                    Caption.Type+
+                                    Taxa+
+                                    Photo.Type+
+                                    Awe.Factor+
+                                    Days+
+                                    Time+
+                                    LogCapCount, family=poisson)
+         summary(comment_model_poisson)
+         
+         #need to test for overdispersion
+         dispersiontest(comment_model_poisson,trafo=1)
+```
+Model is over dispersed with p-value = 0.005344. Proceeding with zero-inflation Negative binomial regression
+```{r}         
+         comment_model_zi3 <- zeroinfl(data=fb_data, Comment.24~
+                                       Photo.Type+
+                                       Awe.Factor+
+                                       Caption.Type+
+                                       Taxa2,
+                                     dist = "negbin")
+
+         
+         #anova
+         summary(comment_model_zi3)
+         Anova(comment_model_zi3, 
+               type="II", 
+               test="Chisq")
+         
+         #pseudo r squared
+         nagelkerke(comment_model_zi3)
+```
+Comparisons
+```{r}       
+         #comparisons
+         marginal_taxa_share = emmeans(comment_model_zi3, ~ Taxa2 )
+
+         kable(pairs(marginal_taxa_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         kable(cld(marginal_taxa_share,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         marginal_awe_share = emmeans(comment_model_zi3, ~ Awe.Factor )
+         
+         kable(pairs(marginal_awe_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         kable(cld(marginal_awe_share ,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         
+         marginal_photo_share = emmeans(comment_model_zi3, ~ Photo.Type )
+         
+         kable(pairs(marginal_photo_share, adjust="tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+         kable (cld(marginal_photo_share ,
+             alpha   = 0.05, 
+             Letters = letters,    ### Use lower-case letters for .group
+             type    = "response", ### Report emmeans in orginal scale
+             adjust =  "tukey")) %>%
+           kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+## Predicting Comments Plots
+
+```{r, warning=FALSE, message=FALSE}  
+         ####plots
+         p1c <- ggplot(fb_data, aes(Awe.Factor,LogComments))+
+           geom_boxplot(fill="#BDBC89", color="black", alpha=.8, notch=FALSE)+
+           theme_bw(base_size=10)+
+           theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+           xlab("Awe Factor")+
+           ylab("Log10 Facebook Comments")+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))
+         
+         p2c <- ggplot(fb_data, aes(Photo.Type, LogComments))+
+           geom_boxplot(fill="#BDBC89", color="black", alpha=.8, notch=FALSE)+
+           theme_bw(base_size=10)+
+           theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+           xlab("Photo Type")+
+           ylab("Log10 Facebook Comments")+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))
+         
+         p4c <- ggplot(fb_data, aes(Taxa2, LogComments))+
+           geom_boxplot(fill="#BDBC89", color="black", alpha=.8, notch=FALSE)+
+           theme_bw(base_size=10)+
+           theme(panel.grid.major = element_line(size = .2, color = "grey"))+
+           xlab("Taxon Group")+
+           ylab("Log10 Facebook Comments")+
+           theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+           scale_x_discrete(labels = wrap_format(15))
+
+         grid.arrange(p1c,p2c,p4c, ncol=1)
+```       
+
+```{r}
+pdf(file="figure5.pdf",width=8.5, height=11, useDingbats=FALSE)
+par(mar=c(5,3,2,2)+0.1) #removes space from around edges of pdf
+ grid.arrange(p1c,p2c,p4c, ncol=1)
+dev.off()
+```
+
+
+## Favorite Taxa Summary Data
+
+```{r}
+setwd("~/Desktop/Facebook Paper/Facebook Experiment")
+fav_taxa <- read.csv("favorite_taxa(DSN).csv")
+kable(summary(fav_taxa$Taxa)) %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
